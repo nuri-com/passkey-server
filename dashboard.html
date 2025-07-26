@@ -346,7 +346,8 @@
     <button class="refresh-btn" onclick="loadDashboard()">↻</button>
 
     <script>
-        const API_BASE = 'https://localhost';
+        // Use the current origin for API calls
+        const API_BASE = window.location.origin;
         let currentUser = null;
         let isLoggedIn = false;
         let allUsersVisible = false;
