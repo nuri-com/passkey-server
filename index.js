@@ -118,6 +118,9 @@ app.get('/generate-registration-options', async (req, res) => {
 });
 
 app.post('/verify-registration', async (req, res) => {
+  const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+  
   try {
     const { username, cred, challengeKey } = req.body;
 
@@ -235,6 +238,23 @@ app.post('/verify-registration', async (req, res) => {
       await db.saveAuthenticator(user.id, authenticatorData);
 
       console.log('Authenticator saved successfully');
+      
+      // Log successful registration
+      await db.logActivity({
+        userId: user.id,
+        username: user.username,
+        action: 'registration',
+        status: 'success',
+        credentialId: authenticatorData.credentialID.toString('base64url'),
+        ipAddress,
+        userAgent,
+        metadata: {
+          deviceType: credentialDeviceType,
+          backedUp: credentialBackedUp,
+          transports: cred.response.transports || [],
+          isAnonymous: user.username.startsWith('anon_')
+        }
+      });
 
       // Clear the challenge
       challenges.delete(lookupKey);
@@ -250,6 +270,21 @@ app.post('/verify-registration', async (req, res) => {
         registrationInfo: verification.registrationInfo,
         error: verification.error
       });
+      
+      // Log failed registration
+      await db.logActivity({
+        username: username || challengeKey || 'unknown',
+        action: 'registration',
+        status: 'error',
+        credentialId: cred?.id || cred?.rawId,
+        ipAddress,
+        userAgent,
+        errorMessage: verification.error || 'Verification failed',
+        metadata: {
+          verified: verification.verified
+        }
+      });
+      
       res.status(400).send({ 
         error: 'Verification failed', 
         details: verification.error || 'Unknown verification error',
@@ -259,6 +294,21 @@ app.post('/verify-registration', async (req, res) => {
   } catch (error) {
     console.error('Registration verification error:', error);
     console.error('Error stack:', error.stack);
+    
+    // Log error
+    await db.logActivity({
+      username: username || challengeKey || 'unknown',
+      action: 'registration',
+      status: 'error',
+      credentialId: cred?.id || cred?.rawId,
+      ipAddress,
+      userAgent,
+      errorMessage: error.message,
+      metadata: {
+        stack: error.stack
+      }
+    });
+    
     res.status(500).send({ error: error.message, stack: error.stack });
   }
 });
@@ -282,6 +332,9 @@ app.get('/generate-authentication-options', async (req, res) => {
 });
 
 app.post('/verify-authentication', async (req, res) => {
+  const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+  
   try {
     const { cred } = req.body;
 
@@ -382,6 +435,22 @@ app.post('/verify-authentication', async (req, res) => {
         verification.authenticationInfo.newCounter
       );
       
+      // Log successful authentication
+      await db.logActivity({
+        userId: user.id,
+        username: user.username,
+        action: 'authentication',
+        status: 'success',
+        credentialId: credentialID.toString('base64url'),
+        ipAddress,
+        userAgent,
+        metadata: {
+          counter: verification.authenticationInfo.newCounter,
+          deviceType: authenticator.credentialDeviceType,
+          isAnonymous: user.username.startsWith('anon_')
+        }
+      });
+      
       // Clear the challenge
       challenges.delete('auth');
       
@@ -395,6 +464,22 @@ app.post('/verify-authentication', async (req, res) => {
       if (verification.error) {
         console.error('Verification error:', verification.error);
       }
+      
+      // Log failed authentication
+      await db.logActivity({
+        userId: user?.id,
+        username: user?.username || 'unknown',
+        action: 'authentication',
+        status: 'error',
+        credentialId: credentialID.toString('base64url'),
+        ipAddress,
+        userAgent,
+        errorMessage: verification.error || 'Authentication verification failed',
+        metadata: {
+          verified: false
+        }
+      });
+      
       res.status(400).send({ 
         error: 'Authentication verification failed',
         details: verification.error || 'Unknown verification error'
@@ -403,6 +488,20 @@ app.post('/verify-authentication', async (req, res) => {
   } catch (error) {
     console.error('Authentication verification error:', error);
     console.error('Error stack:', error.stack);
+    
+    // Log error
+    await db.logActivity({
+      action: 'authentication',
+      status: 'error',
+      credentialId: cred?.id || cred?.rawId,
+      ipAddress,
+      userAgent,
+      errorMessage: error.message,
+      metadata: {
+        stack: error.stack
+      }
+    });
+    
     res.status(500).send({ error: error.message, stack: error.stack });
   }
 });
@@ -460,6 +559,37 @@ app.delete('/api/users/:username', async (req, res) => {
     res.send({ message: `User ${username} and all their authenticators deleted` });
   } catch (error) {
     console.error('Error deleting user:', error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Activity logs endpoint
+app.get('/api/activity-logs', async (req, res) => {
+  try {
+    const { limit = 100, offset = 0, userId, action, status } = req.query;
+    
+    const logs = await db.getActivityLogs({
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      userId: userId ? parseInt(userId) : undefined,
+      action,
+      status
+    });
+    
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching activity logs:', error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Activity stats endpoint
+app.get('/api/activity-stats', async (req, res) => {
+  try {
+    const stats = await db.getActivityStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching activity stats:', error);
     res.status(500).send({ error: error.message });
   }
 });

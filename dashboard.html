@@ -266,12 +266,12 @@
                 <div class="stat-label">Total Passkeys</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="hardware-keys">0</div>
-                <div class="stat-label">Hardware Keys</div>
+                <div class="stat-value" id="active-24h">0</div>
+                <div class="stat-label">Active Users (24h)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="platform-keys">0</div>
-                <div class="stat-label">Platform Keys</div>
+                <div class="stat-value" id="total-logins">0</div>
+                <div class="stat-label">Total Logins</div>
             </div>
         </div>
 
@@ -319,6 +319,47 @@
             <h2>Registered Users</h2>
             <div id="users-container">
                 <div class="no-data">Loading users...</div>
+            </div>
+        </div>
+        
+        <!-- Activity Log Section -->
+        <div class="users-section" style="margin-top: 40px;">
+            <h2>📊 Activity Log</h2>
+            <div style="margin-bottom: 10px;">
+                <button onclick="loadActivityLogs()" style="padding: 8px 16px; margin-right: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh</button>
+                <select id="activity-filter" onchange="loadActivityLogs()" style="padding: 6px; margin-right: 10px;">
+                    <option value="">All Activities</option>
+                    <option value="registration">Registrations</option>
+                    <option value="authentication">Authentications</option>
+                </select>
+                <select id="activity-status" onchange="loadActivityLogs()" style="padding: 6px; margin-right: 10px;">
+                    <option value="">All Status</option>
+                    <option value="success">Success</option>
+                    <option value="error">Errors</option>
+                </select>
+                <label style="margin-left: 20px;">
+                    <input type="checkbox" id="auto-refresh-activity" checked> Auto-refresh (10s)
+                </label>
+            </div>
+            <div id="activity-container" style="background: #fff; border-radius: 8px; max-height: 600px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead style="position: sticky; top: 0; background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                        <tr>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">Time</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">User</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">Action</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">Device</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">IP Address</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activity-logs-content">
+                        <tr>
+                            <td colspan="7" style="padding: 20px; text-align: center; color: #666;">Loading activity logs...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
         
@@ -384,11 +425,95 @@
                 
                 const data = await response.json();
                 updateDashboard(data);
+                
+                // Also load activity stats
+                loadActivityStats();
             } catch (error) {
                 console.error('Dashboard error:', error);
                 document.getElementById('users-container').innerHTML = 
                     '<div class="error">Failed to load dashboard data</div>';
             }
+        }
+        
+        async function loadActivityStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/activity-stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('active-24h').textContent = stats.active_users_24h || 0;
+                    document.getElementById('total-logins').textContent = stats.total_authentications || 0;
+                }
+            } catch (error) {
+                console.error('Error loading activity stats:', error);
+            }
+        }
+        
+        async function loadActivityLogs() {
+            try {
+                const action = document.getElementById('activity-filter').value;
+                const status = document.getElementById('activity-status').value;
+                
+                let url = `${API_BASE}/api/activity-logs?limit=100`;
+                if (action) url += `&action=${action}`;
+                if (status) url += `&status=${status}`;
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to load activity logs: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayActivityLogs(data.logs);
+                
+            } catch (error) {
+                console.error('Error loading activity logs:', error);
+                document.getElementById('activity-logs-content').innerHTML = 
+                    '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #dc3545;">Error loading activity logs</td></tr>';
+            }
+        }
+        
+        function displayActivityLogs(logs) {
+            const container = document.getElementById('activity-logs-content');
+            
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #666;">No activity logs found</td></tr>';
+                return;
+            }
+            
+            const html = logs.map(log => {
+                const date = new Date(log.created_at);
+                const timeStr = date.toLocaleString();
+                
+                const statusClass = log.status === 'success' ? 'success' : 'error';
+                const statusIcon = log.status === 'success' ? '✅' : '❌';
+                const actionIcon = log.action === 'registration' ? '📝' : '🔐';
+                
+                const deviceType = log.credential_device_type || log.metadata?.deviceType || 'Unknown';
+                const deviceIcon = deviceType === 'singleDevice' ? '📱' : deviceType === 'multiDevice' ? '🔑' : '❓';
+                
+                let details = '';
+                if (log.error_message) {
+                    details = `<span style="color: #dc3545;">${log.error_message}</span>`;
+                } else if (log.metadata?.isAnonymous) {
+                    details = '<span style="color: #6c757d;">Anonymous</span>';
+                } else if (log.metadata?.backedUp) {
+                    details = '<span style="color: #28a745;">Backed Up</span>';
+                }
+                
+                return `
+                    <tr style="border-bottom: 1px solid #dee2e6;">
+                        <td style="padding: 12px; font-size: 14px;">${timeStr}</td>
+                        <td style="padding: 12px; font-weight: 500;">${log.username || log.user_username || 'Unknown'}</td>
+                        <td style="padding: 12px;">${actionIcon} ${log.action}</td>
+                        <td style="padding: 12px;"><span class="${statusClass}">${statusIcon} ${log.status}</span></td>
+                        <td style="padding: 12px;">${deviceIcon} ${deviceType}</td>
+                        <td style="padding: 12px; font-family: monospace; font-size: 12px;">${log.ip_address || 'N/A'}</td>
+                        <td style="padding: 12px; font-size: 12px;">${details}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            container.innerHTML = html;
         }
 
         function updateDashboard(data) {
@@ -1205,10 +1330,35 @@
             }
         });
 
+        // Auto-refresh activity logs
+        let activityRefreshInterval = null;
+        
+        function toggleActivityAutoRefresh() {
+            const checkbox = document.getElementById('auto-refresh-activity');
+            if (checkbox.checked) {
+                activityRefreshInterval = setInterval(loadActivityLogs, 10000);
+            } else {
+                clearInterval(activityRefreshInterval);
+                activityRefreshInterval = null;
+            }
+        }
+        
         // Initialize dashboard on page load
         updateUIState();
         loadDashboard();
+        loadActivityLogs();
         loadLogs();
+        
+        // Set up auto-refresh for activity logs
+        document.addEventListener('DOMContentLoaded', () => {
+            const activityCheckbox = document.getElementById('auto-refresh-activity');
+            if (activityCheckbox) {
+                activityCheckbox.addEventListener('change', toggleActivityAutoRefresh);
+                if (activityCheckbox.checked) {
+                    toggleActivityAutoRefresh();
+                }
+            }
+        });
         
         // Auto-refresh every 10 seconds (but not user data to avoid overwriting inputs)
         setInterval(() => {
