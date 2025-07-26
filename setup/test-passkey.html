@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Passkey Test</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+        pre { background: #f0f0f0; padding: 10px; overflow: auto; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Passkey Test for passkey.nuri.com</h1>
+    
+    <button onclick="testRegistration()">Test Registration</button>
+    <button onclick="testAuthentication()">Test Authentication</button>
+    
+    <h2>Output:</h2>
+    <pre id="output"></pre>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        async function testRegistration() {
+            try {
+                log('Starting registration test...');
+                
+                // Get registration options
+                const optionsResponse = await fetch('https://passkey.nuri.com/generate-registration-options');
+                const options = await optionsResponse.json();
+                
+                log('Received options: ' + JSON.stringify(options, null, 2));
+                
+                // Check RP ID
+                log(`RP ID: ${options.rp.id}`);
+                log(`Current domain: ${window.location.hostname}`);
+                
+                // Try to create credential
+                log('Creating credential...');
+                const credential = await navigator.credentials.create({
+                    publicKey: options
+                });
+                
+                log('Credential created successfully!', 'success');
+                
+            } catch (error) {
+                log('Error: ' + error.message, 'error');
+                log('Stack: ' + error.stack, 'error');
+            }
+        }
+        
+        async function testAuthentication() {
+            try {
+                log('Starting authentication test...');
+                
+                // Get authentication options
+                const optionsResponse = await fetch('https://passkey.nuri.com/generate-authentication-options');
+                const options = await optionsResponse.json();
+                
+                log('Received options: ' + JSON.stringify(options, null, 2));
+                
+                // Try to get credential
+                log('Getting credential...');
+                const credential = await navigator.credentials.get({
+                    publicKey: options
+                });
+                
+                log('Credential retrieved successfully!', 'success');
+                
+            } catch (error) {
+                log('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Initial check
+        log('Page loaded on: ' + window.location.hostname);
+        log('Protocol: ' + window.location.protocol);
+        log('WebAuthn available: ' + (window.PublicKeyCredential ? 'Yes' : 'No'));
+    </script>
+</body>
+</html>

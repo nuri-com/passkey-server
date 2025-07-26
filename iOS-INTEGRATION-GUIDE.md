@@ -8,11 +8,14 @@ This guide provides complete integration instructions for iOS developers to conn
 
 - **Base URL**: `https://passkey.nuri.com`
 - **RP ID**: `nuri.com` (parent domain - critical for iOS)
+- **Origin**: iOS sends `https://nuri.com` (not the subdomain)
 - **Endpoints**:
   - Registration: `POST /generate-registration-options`
   - Verify Registration: `POST /verify-registration`
   - Authentication: `GET /generate-authentication-options`
   - Verify Authentication: `POST /verify-authentication`
+
+> **Important**: The server accepts origins from both `https://passkey.nuri.com` (web) and `https://nuri.com` (iOS) to support both platforms.
 
 ## Required Setup
 

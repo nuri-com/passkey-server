@@ -30,6 +30,16 @@ const rpId = process.env.RP_ID || 'localhost';
 const rpName = process.env.RP_NAME || 'Nuri Passkey Server';
 const expectedOrigin = process.env.ORIGIN || 'https://localhost';
 
+// For iOS compatibility, we need to accept the parent domain as origin
+const allowedOrigins = [expectedOrigin];
+if (rpId !== 'localhost' && !expectedOrigin.includes(rpId)) {
+  // Add the parent domain as an allowed origin for iOS
+  allowedOrigins.push(`https://${rpId}`);
+}
+
+console.log('RP ID:', rpId);
+console.log('Allowed origins:', allowedOrigins);
+
 app.get('/generate-registration-options', async (req, res) => {
   console.log('Registration options endpoint called');
   try {
@@ -137,13 +147,13 @@ app.post('/verify-registration', async (req, res) => {
     const { challenge, isAnonymous } = challengeData;
 
     console.log('Expected challenge:', challenge);
-    console.log('Expected origin:', expectedOrigin);
+    console.log('Allowed origins:', allowedOrigins);
     console.log('Expected RP ID:', rpId);
 
     const verification = await verifyRegistrationResponse({
       response: cred,
       expectedChallenge: challenge,
-      expectedOrigin,
+      expectedOrigin: allowedOrigins,
       expectedRPID: rpId,
       requireUserVerification: true,
     });
@@ -303,7 +313,7 @@ app.post('/verify-authentication', async (req, res) => {
     }
 
     console.log('Expected challenge:', challenge);
-    console.log('Expected origin:', expectedOrigin);
+    console.log('Allowed origins:', allowedOrigins);
     console.log('Expected RP ID:', rpId);
 
     // Find the authenticator by its ID
@@ -357,7 +367,7 @@ app.post('/verify-authentication', async (req, res) => {
     const verification = await verifyAuthenticationResponse({
       response: cred,
       expectedChallenge: challenge,
-      expectedOrigin,
+      expectedOrigin: allowedOrigins,
       expectedRPID: rpId,
       credential: credential,  // Changed from 'authenticator' to 'credential'
       requireUserVerification: true,
