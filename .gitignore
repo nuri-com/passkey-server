@@ -3,3 +3,22 @@ node_modules/
 *.log
 .DS_Store
 nginx/certs/
+
+# Deployment files with secrets
+setup/server-info.json
+setup/deployment-complete.json
+setup/credentials.txt
+setup/deployment-info.txt
+setup/run-setup.sh
+setup/deploy-nuri.sh
+setup/deploy-on-server.sh
+
+# Hetzner API tokens and keys
+*hetzner*.key
+*hetzner*.pub
+*.pem
+
+# Backup files
+*.sql
+*.backup
+backups/
