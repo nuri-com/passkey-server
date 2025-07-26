@@ -32,7 +32,7 @@ const expectedOrigin = process.env.ORIGIN || 'https://localhost';
 
 // For iOS compatibility, we need to accept the parent domain as origin
 const allowedOrigins = [expectedOrigin];
-if (rpId !== 'localhost' && !expectedOrigin.includes(rpId)) {
+if (rpId !== 'localhost' && expectedOrigin !== `https://${rpId}`) {
   // Add the parent domain as an allowed origin for iOS
   allowedOrigins.push(`https://${rpId}`);
 }
@@ -493,7 +493,7 @@ app.post('/verify-authentication', async (req, res) => {
     await db.logActivity({
       action: 'authentication',
       status: 'error',
-      credentialId: cred?.id || cred?.rawId,
+      credentialId: req.body.cred?.id || req.body.cred?.rawId || "unknown",
       ipAddress,
       userAgent,
       errorMessage: error.message,
