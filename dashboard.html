@@ -321,6 +321,26 @@
                 <div class="no-data">Loading users...</div>
             </div>
         </div>
+        
+        <div class="users-section" style="margin-top: 40px;">
+            <h2>📋 Server Logs</h2>
+            <div style="margin-bottom: 10px;">
+                <button onclick="loadLogs()" style="padding: 8px 16px; margin-right: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh</button>
+                <select id="log-lines" onchange="loadLogs()" style="padding: 6px; margin-right: 10px;">
+                    <option value="50">Last 50 logs</option>
+                    <option value="100" selected>Last 100 logs</option>
+                    <option value="200">Last 200 logs</option>
+                    <option value="500">Last 500 logs</option>
+                </select>
+                <button onclick="clearLogDisplay()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">🗑️ Clear Display</button>
+                <label style="margin-left: 20px;">
+                    <input type="checkbox" id="auto-refresh-logs" checked> Auto-refresh (5s)
+                </label>
+            </div>
+            <div id="logs-container" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; max-height: 600px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; border: 1px solid #444;">
+                <div id="logs-content">Loading logs...</div>
+            </div>
+        </div>
     </div>
 
     <button class="refresh-btn" onclick="loadDashboard()">↻</button>
@@ -1103,9 +1123,91 @@
             }
         }
 
+        // Load server logs
+        async function loadLogs() {
+            try {
+                const lines = document.getElementById('log-lines').value;
+                const response = await fetch(`${API_BASE}/api/logs?lines=${lines}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load logs: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const logsContent = document.getElementById('logs-content');
+                
+                if (data.logs.length === 0) {
+                    logsContent.innerHTML = '<span style="color: #666;">No logs available</span>';
+                    return;
+                }
+                
+                // Format logs with colors
+                const formattedLogs = data.logs.map(log => {
+                    const levelColor = log.level === 'error' ? '#f48771' : '#9cdcfe';
+                    const timestamp = new Date(log.timestamp).toLocaleString();
+                    
+                    // Escape HTML and format JSON
+                    let message = log.message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    
+                    // Highlight important patterns
+                    message = message.replace(/(error|Error|ERROR)/g, '<span style="color: #f48771;">$1</span>');
+                    message = message.replace(/(success|Success|SUCCESS|verified: true)/g, '<span style="color: #4ec9b0;">$1</span>');
+                    message = message.replace(/(POST|GET|PUT|DELETE)/g, '<span style="color: #dcdcaa;">$1</span>');
+                    message = message.replace(/(\d{3}\.\d{3}\.\d{3}\.\d{3})/g, '<span style="color: #b5cea8;">$1</span>');
+                    
+                    return `<div style="margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 8px;">
+                        <span style="color: #666;">${timestamp}</span>
+                        <span style="color: ${levelColor}; margin-left: 10px;">[${log.level.toUpperCase()}]</span>
+                        <pre style="margin: 4px 0 0 0; white-space: pre-wrap; word-wrap: break-word;">${message}</pre>
+                    </div>`;
+                }).reverse().join('');
+                
+                logsContent.innerHTML = formattedLogs;
+                
+                // Auto-scroll to bottom
+                const container = document.getElementById('logs-container');
+                container.scrollTop = container.scrollHeight;
+                
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                document.getElementById('logs-content').innerHTML = 
+                    `<span style="color: #f48771;">Error loading logs: ${error.message}</span>`;
+            }
+        }
+        
+        function clearLogDisplay() {
+            document.getElementById('logs-content').innerHTML = 
+                '<span style="color: #666;">Log display cleared. Click Refresh to reload.</span>';
+        }
+        
+        // Auto-refresh logs
+        let logRefreshInterval = null;
+        
+        function toggleLogAutoRefresh() {
+            const checkbox = document.getElementById('auto-refresh-logs');
+            if (checkbox.checked) {
+                logRefreshInterval = setInterval(loadLogs, 5000);
+            } else {
+                clearInterval(logRefreshInterval);
+                logRefreshInterval = null;
+            }
+        }
+        
+        // Initialize auto-refresh
+        document.addEventListener('DOMContentLoaded', () => {
+            const checkbox = document.getElementById('auto-refresh-logs');
+            if (checkbox) {
+                checkbox.addEventListener('change', toggleLogAutoRefresh);
+                if (checkbox.checked) {
+                    toggleLogAutoRefresh();
+                }
+            }
+        });
+
         // Initialize dashboard on page load
         updateUIState();
         loadDashboard();
+        loadLogs();
         
         // Auto-refresh every 10 seconds (but not user data to avoid overwriting inputs)
         setInterval(() => {

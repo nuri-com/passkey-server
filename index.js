@@ -112,9 +112,11 @@ app.post('/verify-registration', async (req, res) => {
     const { username, cred, challengeKey } = req.body;
 
     console.log('Registration verification request');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     console.log('Username:', username || 'Anonymous');
     console.log('Challenge key:', challengeKey);
     console.log('Credential ID:', cred?.id);
+    console.log('Credential Raw ID:', cred?.rawId);
     console.log('Credential type:', cred?.type);
     console.log('Has attestation object:', !!cred?.response?.attestationObject);
     console.log('Has client data:', !!cred?.response?.clientDataJSON);
@@ -274,13 +276,24 @@ app.post('/verify-authentication', async (req, res) => {
     const { cred } = req.body;
 
     console.log('Authentication verification request');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     console.log('Credential ID:', cred?.id);
+    console.log('Credential Raw ID:', cred?.rawId);
+    console.log('Credential type:', cred?.type);
     console.log('Has authenticator data:', !!cred?.response?.authenticatorData);
     console.log('Has client data:', !!cred?.response?.clientDataJSON);
     console.log('Has signature:', !!cred?.response?.signature);
+    console.log('User handle:', cred?.response?.userHandle);
 
     if (!cred) {
       return res.status(400).send({ error: 'Missing credential' });
+    }
+
+    // Handle both id and rawId
+    const credentialIdString = cred.id || cred.rawId;
+    if (!credentialIdString) {
+      console.error('Missing credential ID in request');
+      return res.status(400).send({ error: 'Missing credential ID' });
     }
 
     const challenge = challenges.get('auth');
@@ -294,7 +307,7 @@ app.post('/verify-authentication', async (req, res) => {
     console.log('Expected RP ID:', rpId);
 
     // Find the authenticator by its ID
-    const credentialID = Buffer.from(cred.id, 'base64url');
+    const credentialID = Buffer.from(credentialIdString, 'base64url');
     console.log('Looking for authenticator with ID:', credentialID.toString('base64'));
     
     const authenticator = await db.getAuthenticatorById(credentialID);
@@ -440,6 +453,74 @@ app.delete('/api/users/:username', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+
+// Server logs endpoint
+app.get('/api/logs', async (req, res) => {
+  try {
+    const { lines = 100 } = req.query;
+    const maxLines = Math.min(parseInt(lines) || 100, 1000); // Max 1000 lines
+    
+    // Store recent logs in memory (in production, use proper logging service)
+    const logs = global.serverLogs || [];
+    const recentLogs = logs.slice(-maxLines);
+    
+    res.json({
+      logs: recentLogs,
+      count: recentLogs.length,
+      total: logs.length
+    });
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Initialize global logs array
+global.serverLogs = global.serverLogs || [];
+
+// Override console.log to capture logs
+const originalLog = console.log;
+console.log = function(...args) {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+  ).join(' ');
+  
+  // Store in memory (limit to last 10000 logs)
+  global.serverLogs.push({
+    timestamp,
+    level: 'info',
+    message
+  });
+  
+  if (global.serverLogs.length > 10000) {
+    global.serverLogs = global.serverLogs.slice(-5000);
+  }
+  
+  // Call original console.log
+  originalLog.apply(console, args);
+};
+
+// Also capture console.error
+const originalError = console.error;
+console.error = function(...args) {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+  ).join(' ');
+  
+  global.serverLogs.push({
+    timestamp,
+    level: 'error',
+    message
+  });
+  
+  if (global.serverLogs.length > 10000) {
+    global.serverLogs = global.serverLogs.slice(-5000);
+  }
+  
+  originalError.apply(console, args);
+};
 
 // Dashboard API endpoint
 app.get('/api/dashboard', async (req, res) => {
