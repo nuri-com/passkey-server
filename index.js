@@ -94,7 +94,7 @@ app.get('/generate-registration-options', async (req, res) => {
       excludeCredentials: excludeCredentials,
       authenticatorSelection: {
         residentKey: 'required',
-        userVerification: 'required',
+        userVerification: 'preferred',
       },
     });
 
@@ -158,7 +158,7 @@ app.post('/verify-registration', async (req, res) => {
       expectedChallenge: challenge,
       expectedOrigin: allowedOrigins,
       expectedRPID: rpId,
-      requireUserVerification: true,
+      requireUserVerification: false,
     });
 
     console.log('Verification successful:', verification.verified);
@@ -318,7 +318,7 @@ app.get('/generate-authentication-options', async (req, res) => {
     const options = await generateAuthenticationOptions({
       rpID: rpId,
       allowCredentials: [], // Allow any credential
-      userVerification: 'required',
+      userVerification: 'preferred',
     });
 
     // Store challenge temporarily (in production, use sessions)
@@ -371,9 +371,21 @@ app.post('/verify-authentication', async (req, res) => {
 
     // Find the authenticator by its ID
     const credentialID = Buffer.from(credentialIdString, 'base64url');
-    console.log('Looking for authenticator with ID:', credentialID.toString('base64'));
+    console.log('Looking for authenticator with ID:', credentialID.toString('base64url'));
     
     const authenticator = await db.getAuthenticatorById(credentialID);
+    
+    if (!authenticator) {
+      console.log("Debug: Credential not found. Checking database...");
+      try {
+        const allAuths = await db.pool.query("SELECT credential_id FROM authenticators LIMIT 5");
+        console.log("Sample DB credentials (base64url):", allAuths.rows.map(r => Buffer.from(r.credential_id).toString("base64url")));
+        console.log("Client sent (base64url):", credentialIdString);
+        console.log("Buffer comparison (hex):", credentialID.toString("hex"));
+      } catch (err) {
+        console.error("Debug error:", err.message);
+      }
+    }
 
     if (!authenticator) {
       console.error('Authenticator not found for ID:', cred.id);
@@ -423,7 +435,7 @@ app.post('/verify-authentication', async (req, res) => {
       expectedOrigin: allowedOrigins,
       expectedRPID: rpId,
       credential: credential,  // Changed from 'authenticator' to 'credential'
-      requireUserVerification: true,
+      requireUserVerification: false,
     });
 
     console.log('Authentication verification result:', verification.verified);
