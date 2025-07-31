@@ -94,7 +94,7 @@ app.get('/generate-registration-options', async (req, res) => {
       excludeCredentials: excludeCredentials,
       authenticatorSelection: {
         residentKey: 'required',
-        userVerification: 'required',
+        userVerification: 'preferred',  // Changed from 'required' to 'preferred'
       },
     });
 
@@ -158,7 +158,7 @@ app.post('/verify-registration', async (req, res) => {
       expectedChallenge: challenge,
       expectedOrigin: allowedOrigins,
       expectedRPID: rpId,
-      requireUserVerification: true,
+      requireUserVerification: false,  // Changed from true to false
     });
 
     console.log('Verification successful:', verification.verified);
@@ -423,7 +423,7 @@ app.post('/verify-authentication', async (req, res) => {
       expectedOrigin: allowedOrigins,
       expectedRPID: rpId,
       credential: credential,  // Changed from 'authenticator' to 'credential'
-      requireUserVerification: true,
+      requireUserVerification: false,  // Changed from true to false
     });
 
     console.log('Authentication verification result:', verification.verified);
