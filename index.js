@@ -747,6 +747,91 @@ app.get('/encryption-example', (req, res) => {
   res.sendFile(__dirname + '/encryption-example.html');
 });
 
+// Check if username exists endpoint
+app.get('/api/users/:username/exists', async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+    
+    console.log('Checking if user exists: ' + username);
+    const user = await db.getUserByUsername(username);
+    
+    res.json({ exists: !!user });
+  } catch (error) {
+    console.error('Error checking user existence:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get user passkeys endpoint
+app.get('/api/users/:username/passkeys', async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+    
+    console.log('Fetching passkeys for user: ' + username);
+    
+    // Get user from database
+    const user = await db.getUserByUsername(username);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get all authenticators for this user
+    const authenticators = await db.getAuthenticatorsByUserId(user.id);
+    
+    // Format passkeys for response
+    const passkeys = authenticators.map(auth => {
+      // Extract device name from transports or user agent if available
+      let deviceName = 'Unknown Device';
+      
+      // Try to determine device type from transports
+      if (auth.transports) {
+        if (auth.transports.includes('internal')) {
+          deviceName = 'Platform Authenticator';
+        } else if (auth.transports.includes('usb')) {
+          deviceName = 'Security Key';
+        } else if (auth.transports.includes('ble') || auth.transports.includes('nfc')) {
+          deviceName = 'Mobile Device';
+        }
+      }
+      
+      // If we have device info stored, use that
+      if (auth.device_name) {
+        deviceName = auth.device_name;
+      }
+      
+      return {
+        credentialId: Buffer.from(auth.credentialID).toString('base64url'),
+        deviceName: deviceName,
+        lastUsed: auth.last_used || auth.updated_at || auth.created_at,
+        createdAt: auth.created_at
+      };
+    });
+    
+    // Sort by last used date (most recent first)
+    passkeys.sort((a, b) => {
+      const dateA = new Date(a.lastUsed || a.createdAt);
+      const dateB = new Date(b.lastUsed || b.createdAt);
+      return dateB - dateA;
+    });
+    
+    console.log('Found ' + passkeys.length + ' passkeys for ' + username);
+    res.json({ passkeys });
+    
+  } catch (error) {
+    console.error('Error fetching user passkeys:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Store encrypted user data (requires authentication)
 app.post('/api/users/:identifier/data', async (req, res) => {
   try {
