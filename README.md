@@ -225,11 +225,17 @@ GET /api/users/:username/data?credentialId=xxx
 }
 ```
 
-#### 7. Dashboard & Management
+#### 7. User Query Endpoints
+- `GET /api/users/:username/exists` - Check if username exists
+- `GET /api/users/:username/passkeys` - List all passkeys for a user
+
+#### 8. Dashboard & Management
 - `GET /dashboard` - Web dashboard
 - `GET /api/dashboard` - Dashboard API data
 - `DELETE /api/users/:username` - Delete user
 - `DELETE /api/clear-database` - Clear all data (dev only)
+
+For complete API documentation with request/response examples, see [docs/API.md](docs/API.md)
 
 ## iOS/Swift Integration Guide
 
